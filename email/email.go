@@ -15,7 +15,7 @@ import (
 	"github.com/jaytaylor/html2text"
 	"github.com/spf13/viper"
 	"github.com/vanng822/go-premailer/premailer"
-	"gopkg.in/gomail.v2"
+	gomail "gopkg.in/gomail.v2"
 )
 
 var (
@@ -43,8 +43,8 @@ func NewMailer() (*Mailer, error) {
 	}{
 		viper.GetString("email_smtp_host"),
 		viper.GetInt("email_smtp_port"),
-		viper.GetString("email_smtp_user"),
-		viper.GetString("email_smtp_password"),
+		viper.GetString("sendgrid_username"),
+		viper.GetString("sendgrid_password"),
 	}
 
 	s := &Mailer{
