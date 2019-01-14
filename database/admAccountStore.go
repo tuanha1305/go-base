@@ -9,11 +9,14 @@ import (
 	"github.com/dhax/go-base/models"
 	"github.com/go-pg/pg"
 	"github.com/go-pg/pg/orm"
+	"github.com/go-pg/pg/urlvalues"
 )
 
 var (
 	// ErrUniqueEmailConstraint provides error message for already registered email address.
 	ErrUniqueEmailConstraint = errors.New("email already registered")
+	// ErrBadParams could not parse params to filter
+	ErrBadParams = errors.New("bad parameters")
 )
 
 // AdmAccountStore implements database operations for account management by admin.
@@ -30,33 +33,39 @@ func NewAdmAccountStore(db *pg.DB) *AdmAccountStore {
 
 // AccountFilter provides pagination and filtering options on accounts.
 type AccountFilter struct {
-	orm.Pager
-	Filters url.Values
-	Order   []string
+	Pager  *urlvalues.Pager
+	Filter *urlvalues.Filter
+	Order  []string
 }
 
-// Filter applies an AccountFilter on an orm.Query.
-func (f *AccountFilter) Filter(q *orm.Query) (*orm.Query, error) {
-	q = q.Apply(f.Pager.Paginate)
-	q = q.Apply(orm.URLFilters(f.Filters))
+// NewAccountFilter returns an AccountFilter with options parsed from request url values.
+func NewAccountFilter(params interface{}) (*AccountFilter, error) {
+	v, ok := params.(url.Values)
+	if !ok {
+		return nil, ErrBadParams
+	}
+	p := urlvalues.Values(v)
+	f := &AccountFilter{
+		Pager:  urlvalues.NewPager(p),
+		Filter: urlvalues.NewFilter(p),
+		Order:  p["order"],
+	}
+	return f, nil
+}
+
+// Apply applies an AccountFilter on an orm.Query.
+func (f *AccountFilter) Apply(q *orm.Query) (*orm.Query, error) {
+	q = q.Apply(f.Pager.Pagination)
+	q = q.Apply(f.Filter.Filters)
 	q = q.Order(f.Order...)
 	return q, nil
 }
 
-// NewAccountFilter returns an AccountFilter with options parsed from request url values.
-func NewAccountFilter(v url.Values) AccountFilter {
-	var f AccountFilter
-	f.SetURLValues(v)
-	f.Filters = v
-	f.Order = v["order"]
-	return f
-}
-
 // List applies a filter and returns paginated array of matching results and total count.
-func (s *AdmAccountStore) List(f AccountFilter) ([]pwdless.Account, int, error) {
+func (s *AdmAccountStore) List(f *AccountFilter) ([]pwdless.Account, int, error) {
 	a := []pwdless.Account{}
 	count, err := s.db.Model(&a).
-		Apply(f.Filter).
+		Apply(f.Apply).
 		SelectAndCount()
 	if err != nil {
 		return nil, 0, err
